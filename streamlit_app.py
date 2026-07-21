@@ -1,56 +1,205 @@
 import streamlit as st
-from openai import OpenAI
+from consulta_of import consultar_of
+from indicador_data import indicador_por_data
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+# ==========================
+# CONFIGURAÇÃO DA PÁGINA
+# ==========================
+
+st.set_page_config(
+    page_title="Chat Carton",
+    page_icon="📦",
+    layout="wide"
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+st.title("📦 Chat Carton")
+st.write("Bem-vindo ao sistema da Carton.")
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# ==========================
+# MENU LATERAL
+# ==========================
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+st.sidebar.title("Menu")
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+pagina = st.sidebar.radio(
+    "Escolha uma opção",
+    [
+        "Consulta OF",
+        "Indicador por Data"
+    ]
+)
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+# ==========================================================
+# CONSULTA OF
+# ==========================================================
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+if pagina == "Consulta OF":
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
+    st.header("📋 Consulta de Ordem de Fabricação")
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    numero = st.text_input("Digite o número da OF")
+
+    if st.button("Consultar"):
+
+        if numero == "":
+            st.warning("Digite uma OF.")
+        else:
+
+            resultado = consultar_of(numero)
+
+            if resultado is None:
+
+                st.error("OF não encontrada!")
+
+            else:
+
+                st.success("OF encontrada!")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.subheader("Dados Gerais")
+
+                    st.write(f"**OF:** {resultado['OF']}")
+                    st.write(f"**Cliente:** {resultado['Cliente']}")
+                    st.write(f"**Data:** {resultado['Data'].strftime('%d/%m/%Y')}")
+                    st.write(f"**Turno:** {resultado['Turno']}")
+
+                with col2:
+                    st.subheader("Controle")
+
+                    st.metric(
+                        "Apontamentos",
+                        resultado["Apontamentos"]
+                    )
+
+                st.divider()
+
+                col1, col2, col3 = st.columns(3)
+
+                col1.metric(
+                    "Peso Produzido",
+                    f"{resultado['Peso']:,.2f} KG"
+                )
+
+                col2.metric(
+                    "M² Produzido",
+                    f"{resultado['M2']:,.2f}"
+                )
+
+                col3.metric(
+                    "Metros Lineares",
+                    f"{resultado['Metros']:,.2f}"
+                )
+
+                st.divider()
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+
+                    st.subheader("Processo")
+
+                    st.metric(
+                        "Refile",
+                        f"{resultado['Refile']:,.2f} KG"
+                    )
+
+                    st.metric(
+                        "% Refile",
+                        f"{resultado['% Refile']:.2f}%"
+                    )
+
+                with col2:
+
+                    st.subheader("Financeiro")
+
+                    st.metric(
+                        "Valor Produzido",
+                        f"R$ {resultado['Valor']:,.2f}"
+                    )
+
+                    st.metric(
+                        "Preço Médio KG",
+                        f"R$ {resultado['Preço KG']:,.2f}"
+                    )
+
+# ==========================================================
+# INDICADOR POR DATA
+# ==========================================================
+
+elif pagina == "Indicador por Data":
+
+    st.header("📊 Indicador Diário")
+
+    data = st.date_input(
+        "Escolha uma data",
+        format="DD/MM/YYYY"
+    )
+
+    if st.button("Gerar Indicador"):
+
+        with st.spinner("Gerando indicador..."):
+
+            resultado = indicador_por_data(data)
+
+        if resultado is None:
+
+            st.error("Nenhum apontamento encontrado para esta data.")
+
+        else:
+
+            st.success("Indicador gerado com sucesso!")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                st.metric(
+                    "OF Produzidas",
+                    resultado["OF"]
+                )
+
+                st.metric(
+                    "Apontamentos",
+                    resultado["Apontamentos"]
+                )
+
+                st.metric(
+                    "Peso Produzido",
+                    f"{resultado['Peso']:,.2f} KG"
+                )
+
+                st.metric(
+                    "Área Produzida",
+                    f"{resultado['M2']:,.2f} m²"
+                )
+
+            with col2:
+
+                st.metric(
+                    "Metros Lineares",
+                    f"{resultado['Metros']:,.2f}"
+                )
+
+                st.metric(
+                    "Valor Produzido",
+                    f"R$ {resultado['Valor']:,.2f}"
+                )
+
+                st.metric(
+                    "Preço Médio KG",
+                    f"R$ {resultado['Preço KG']:,.2f}"
+                )
+
+                st.metric(
+                    "% Refile",
+                    f"{resultado['% Refile']:.2f}%"
+                )
+
+            st.divider()
+
+            st.metric(
+                "Refile Total",
+                f"{resultado['Refile']:,.2f} KG"
+            )
